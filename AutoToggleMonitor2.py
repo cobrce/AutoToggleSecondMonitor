@@ -35,29 +35,36 @@ def process_name(pid):
 def is_explorer(pid):
         return "explorer.exe" in process_name(pid)
 
-def in_screen(left,top,right,bottom):
+def in_screen(left,top,right,bottom,rect,offset):
 
     def between(val,min,max):
-        return val >= min and val <=max
-    def in_rectangle(x,y,rect):
-        return between(x,rect[0]-10, rect[2] -10) and between(y,rect[1],rect[3])
-    global rect
+        return val > min and val <max
+    def in_rectangle(x,y,rect,offset):
+        return between(x,rect[0]+offset, rect[2]+offset) and between(y,rect[1],rect[3])
 
     
-    points = [(left,top),(right,top),(bottom,right),(bottom,left)]
+    points = [(left,top),(right,top),(right, bottom),(left,bottom)]
 
     for point in points:
-        if in_rectangle(*point,rect):
+        if in_rectangle(*point,rect,offset):
             return True
     return False    
 
 def enumwindow_callback(hwnd,power_mode:list):
 
-    if in_screen(*GetWindowRect(hwnd)) and IsWindowVisible(hwnd):
+    ignore = [ "TextInputHost.exe",
+        "explorer.exe",
+        "ApplicationFrameHost.exe"
+    ]
+
+    global rect
+    window_rect = GetWindowRect(hwnd)
+
+    if in_screen(*window_rect,rect,-10) or in_screen(*rect,window_rect,10) and IsWindowVisible(hwnd):
         c = GetClassName(hwnd)
         tid,pid = GetWindowThreadProcessId(hwnd)
         name = process_name(pid)[-1]
-        if not "explorer.exe" in name or c == "CabinetWClass":
+        if not name in ignore or c == "CabinetWClass":
             power_mode[0] = PowerMode.on
             power_mode[1] = name
 
