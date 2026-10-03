@@ -9,6 +9,7 @@ from win32gui import EnumWindows, GetClassName, GetWindowRect, IsWindowVisible
 from win32process import GetModuleFileNameEx, GetWindowThreadProcessId
 
 
+cancelable_turn_off = False
 
 monitor = None
 def get_second_monitor():
@@ -131,7 +132,7 @@ def main():
                 toggled_time = time()
 
         elif state == WAITING_FOR_TURN_OFF:
-            if power_mode == PowerMode.on:
+            if cancelable_turn_off and power_mode == PowerMode.on:
                 state = TURNED_ON
             elif time() - toggled_time > 5 :
                 if second_monitor_get_power_mode() != PowerMode.standby:
