@@ -25,19 +25,30 @@ def process_name(pid):
         CloseHandle(hProcess)
         return name
     except:
-        return []
+        return [""]
 
 def is_explorer(pid):
         return "explorer.exe" in process_name(pid)
 
+def in_screen(left,right,top,bottom):
+    def between(val,min,max):
+        return val >= min and val <=max
+    
+    for val in [left,right,top,bottom]:
+        if between(val,-1609,-10):
+            return True
+    return False
+
 def enumwindow_callback(hwnd,power_mode:list):
     left,top,right,bottom = GetWindowRect(hwnd)
     
-    if (left < -10 and left >=-1610 and IsWindowVisible(hwnd)):
+    if in_screen(*GetWindowRect(hwnd)) and IsWindowVisible(hwnd):
         c = GetClassName(hwnd)
         tid,pid = GetWindowThreadProcessId(hwnd)
-        if not is_explorer(pid) or c == "CabinetWClass":
+        name = process_name(pid)[-1]
+        if not "explorer.exe" in name or c == "CabinetWClass":
             power_mode[0] = PowerMode.on
+            power_mode[1] = name
     pass
 
 def main():
@@ -47,13 +58,16 @@ def main():
     monitor_power_mode = 0
     start_time = time()
     while True:
-        power_mode = [PowerMode.standby]
+        power_mode = [PowerMode.standby,""]
         EnumWindows(enumwindow_callback,power_mode)
+        found_process = power_mode[1]
         power_mode = power_mode[0]
         if (power_mode != prev_power_mode):
             print("power_mode : PowerMode." + ("on" if power_mode == PowerMode.on else "standby"))
             if (power_mode == PowerMode.standby):
                 start_time = time()
+            else:
+                print(f"Detected a window from process {found_process}")
         if (power_mode == PowerMode.on or time() - (start_time) > 5):
             if  (monitor_power_mode != power_mode):
                 while True:
