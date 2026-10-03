@@ -76,7 +76,7 @@ def get_second_monitor():
 
 def main():
     print("AutoToggleMonitor2 by COB")
-    print("(it turns on/off DVI monitor if it contains no window)")
+    print("(it turns on/off 2nd monitor depending on the presence of a window or not)")
 
     global handle,rect
     handle,rect =  get_second_monitor()
