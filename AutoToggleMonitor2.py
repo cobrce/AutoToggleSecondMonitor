@@ -1,25 +1,38 @@
 #pip3 install monitorcontrol
 #pip3 install pywin32
-from time import time,sleep
+from time import time
 
-from monitorcontrol import get_monitors, InputSource, PowerMode
-from win32gui import EnumWindows,GetWindowRect, IsWindowVisible,GetClassName
-from win32process import GetWindowThreadProcessId, GetModuleFileNameEx
-from win32api import OpenProcess,CloseHandle,EnumDisplayMonitors
+from monitorcontrol import PowerMode, get_monitors
+from win32api import CloseHandle, EnumDisplayMonitors, OpenProcess
 from win32con import PROCESS_QUERY_INFORMATION
+from win32gui import EnumWindows, GetClassName, GetWindowRect, IsWindowVisible
+from win32process import GetModuleFileNameEx, GetWindowThreadProcessId
 
+
+
+monitor = None
+def get_second_monitor():
+    global monitor
+    if monitor is None:
+        monitors = get_monitors()
+        if (len(monitors)<2):
+            return
+        monitor = monitors[1]
+    return monitor
 
 def second_monitor_set_power_mode(powermode:PowerMode) -> None:
-    monitors = get_monitors()
-    if (len(monitors)<2):
+    monitor = get_second_monitor()
+    if monitor is None:
         return
-    monitor = monitors[1]
     with monitor:
-        while True:
-            monitor.set_power_mode(powermode)
-            sleep(5)
-            if monitor.get_power_mode() == powermode:
-                break
+        monitor.set_power_mode(powermode)
+
+def second_monitor_get_power_mode() -> PowerMode:
+    monitor = get_second_monitor()
+    if monitor is None:
+        return PowerMode.standby
+    with monitor:
+        return monitor.get_power_mode()
 
 
 
@@ -56,58 +69,95 @@ def enumwindow_callback(hwnd,power_mode:list):
         "explorer.exe",
         "ApplicationFrameHost.exe"
     ]
-
-    global rect
+    _, monitor_rect = get_second_monitor_handle_and_rect()
     window_rect = GetWindowRect(hwnd)
 
-    if in_screen(*window_rect,rect,-10) or in_screen(*rect,window_rect,10) and IsWindowVisible(hwnd):
+    if in_screen(*window_rect,monitor_rect,-10) or in_screen(*monitor_rect,window_rect,10) and IsWindowVisible(hwnd):
         c = GetClassName(hwnd)
-        tid,pid = GetWindowThreadProcessId(hwnd)
+        _,pid = GetWindowThreadProcessId(hwnd)
         name = process_name(pid)[-1]
         if not name in ignore or c == "CabinetWClass":
             power_mode[0] = PowerMode.on
             power_mode[1] = name
 
-def get_second_monitor():
+def get_second_monitor_handle_and_rect():
     monitors = EnumDisplayMonitors(None,None)
     if (len(monitors) < 2):
         return 0,(0,0,0,0)
     return (monitors[1][0].handle,monitors[1][2])
 
+    
+TURNED_ON = 1
+WAITING_FOR_TURN_ON = 2
+ON = 3
+TURNED_OFF = 4
+WAITING_FOR_TURN_OFF = 5
+OFF = 6
+
 def main():
+    def log_mode(power_mode):
+        print("power_mode : PowerMode." + ("on" if power_mode == PowerMode.on else "standby"))
+
     print("AutoToggleMonitor2 by COB")
     print("(it turns on/off 2nd monitor depending on the presence of a window or not)")
 
-    global handle,rect
-    handle,rect =  get_second_monitor()
+    handle,rect =  get_second_monitor_handle_and_rect()
     print(f"Second monitor handle {handle}, rectangle {rect}")
 
     prev_power_mode = 0
-    monitor_power_mode = 0
-    start_time = time()
+
+    if second_monitor_get_power_mode() == PowerMode.on:
+        state = ON
+    else:
+        state = OFF
+    
+    toggled_time = 0
     while True:
         enum_result = [PowerMode.standby,""]
         EnumWindows(enumwindow_callback,enum_result)
         power_mode, found_process = enum_result
 
-        if (power_mode != prev_power_mode):
-            print("power_mode : PowerMode." + ("on" if power_mode == PowerMode.on else "standby"))
-            if (power_mode == PowerMode.standby):
-                start_time = time()
+        if state == ON:
+            if power_mode == PowerMode.standby:
+                state = TURNED_OFF
+                toggled_time = time()
+
+        elif state == TURNED_OFF:
+            if power_mode == PowerMode.on:
+                state = ON
+            elif time() - toggled_time > 5:
+                state = WAITING_FOR_TURN_OFF
+                second_monitor_set_power_mode(PowerMode.standby)
+                toggled_time = time()
+
+        elif state == WAITING_FOR_TURN_OFF:
+            if power_mode == PowerMode.on:
+                state = TURNED_ON
+            elif time() - toggled_time > 5 :
+                if second_monitor_get_power_mode() != PowerMode.standby:
+                    state = TURNED_OFF
+                else:
+                    state = OFF
+
+        elif state == OFF:
+            if power_mode == PowerMode.on:
+                state = TURNED_ON
+
+        elif state == TURNED_ON:
+            second_monitor_set_power_mode(PowerMode.on)
+            toggled_time = time()
+            state = WAITING_FOR_TURN_ON
+
+        elif state == WAITING_FOR_TURN_ON:
+            if time() - toggled_time > 5 and second_monitor_get_power_mode() != PowerMode.on:
+                state = TURNED_ON
             else:
+                state = ON
+
+        if power_mode != prev_power_mode:
+            if power_mode == PowerMode.on:
                 print(f"Detected a window from process {found_process}")
-
-        if (power_mode == PowerMode.on or time() - (start_time) > 5):
-            if  (monitor_power_mode != power_mode):
-                while True:
-                    try:
-                        second_monitor_set_power_mode(power_mode)
-                        break
-                    except:
-                        sleep(1)
-                monitor_power_mode = power_mode
-                print("Monitor turned " + ("ON" if power_mode == PowerMode.on else "OFF"))
-
+            log_mode(power_mode)
         prev_power_mode = power_mode
 
 if __name__ == "__main__":
