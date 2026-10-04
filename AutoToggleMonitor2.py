@@ -7,6 +7,8 @@ from win32api import CloseHandle, EnumDisplayMonitors, OpenProcess
 from win32con import PROCESS_QUERY_INFORMATION
 from win32gui import EnumWindows, GetClassName, GetWindowRect, IsWindowVisible
 from win32process import GetModuleFileNameEx, GetWindowThreadProcessId
+from pywintypes import error
+
 
 
 cancelable_turn_off = False
@@ -71,7 +73,10 @@ def enumwindow_callback(hwnd,power_mode:list):
         "ApplicationFrameHost.exe"
     ]
     _, monitor_rect = get_second_monitor_handle_and_rect()
-    window_rect = GetWindowRect(hwnd)
+    try:
+        window_rect = GetWindowRect(hwnd)
+    except error:
+        return
 
     if in_screen(*window_rect,monitor_rect,-10) or in_screen(*monitor_rect,window_rect,10) and IsWindowVisible(hwnd):
         c = GetClassName(hwnd)
