@@ -2,7 +2,7 @@
 #pip3 install pywin32
 from time import time
 
-from monitorcontrol import PowerMode, get_monitors
+from monitorcontrol import PowerMode, VCPError, get_monitors
 from win32api import CloseHandle, EnumDisplayMonitors, OpenProcess
 from win32con import PROCESS_QUERY_INFORMATION
 from win32gui import EnumWindows, GetClassName, GetWindowRect, IsWindowVisible
@@ -133,8 +133,11 @@ def main():
                 state = ON
             elif time() - toggled_time > 5:
                 state = WAITING_FOR_TURN_OFF
-                second_monitor_set_power_mode(PowerMode.standby)
                 toggled_time = time()
+                try:
+                    second_monitor_set_power_mode(PowerMode.standby)
+                except VCPError:
+                    toggled_time += 3
 
         elif state == WAITING_FOR_TURN_OFF:
             if cancelable_turn_off and power_mode == PowerMode.on:
@@ -150,8 +153,11 @@ def main():
                 state = TURNED_ON
 
         elif state == TURNED_ON:
-            second_monitor_set_power_mode(PowerMode.on)
             toggled_time = time()
+            try:
+                second_monitor_set_power_mode(PowerMode.on)
+            except VCPError:
+                toggled_time += 3
             state = WAITING_FOR_TURN_ON
 
         elif state == WAITING_FOR_TURN_ON:
